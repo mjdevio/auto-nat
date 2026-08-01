@@ -1,0 +1,300 @@
+```html
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Auto-Nat - Scottish Mountain AR</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    canvas.drag-active { cursor: grabbing; }
+  </style>
+</head>
+<body class="h-full w-full overflow-hidden select-none font-sans bg-slate-950 text-slate-100">
+
+  <div id="app" class="relative h-full w-full flex flex-col">
+
+    <!-- FLOATING COMPACT HEADER -->
+    <header class="absolute top-4 left-4 right-4 z-30 flex justify-between items-start pointer-events-none">
+      
+      <!-- Branding & Status (Left) -->
+      <div class="glass-panel px-3 py-2 rounded-xl pointer-events-auto shadow-lg flex flex-col gap-0.5 border-slate-700/50">
+        <h1 class="font-bold text-[13px] tracking-wide text-emerald-400 flex items-center gap-1.5">
+          <i data-lucide="mountain-snow" class="w-4 h-4"></i> AUTO-NAT
+        </h1>
+        <p id="location-status" class="text-[9px] text-slate-400 flex items-center gap-1 uppercase tracking-wider">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Waiting for sensors
+        </p>
+      </div>
+
+      <!-- Quick Actions (Right) -->
+      <div class="flex flex-col gap-2 pointer-events-auto">
+        <!-- Sensor/Gyro -->
+        <button id="sensor-auth-btn" onclick="requestSensorPermissions()" class="w-10 h-10 bg-emerald-600/90 hover:bg-emerald-500 backdrop-blur-md rounded-xl text-white flex items-center justify-center border border-emerald-400/40 shadow-lg transition" title="Enable AR Gyro">
+          <i data-lucide="compass" class="w-5 h-5"></i>
+        </button>
+        <!-- Location Sim -->
+        <button id="sim-btn" onclick="toggleSimMenu()" class="w-10 h-10 glass-panel hover:bg-slate-800 rounded-xl text-cyan-400 flex items-center justify-center border border-slate-700 shadow-lg transition" title="Change Location">
+          <i data-lucide="map-pin" class="w-5 h-5"></i>
+        </button>
+        <!-- Emergency -->
+        <button onclick="openEmergencyModal()" class="w-10 h-10 bg-rose-500/20 hover:bg-rose-500/30 backdrop-blur-md rounded-xl text-rose-400 flex items-center justify-center border border-rose-500/40 shadow-lg transition" title="Emergency Details">
+          <i data-lucide="sos" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- SIMULATION SELECTOR MODAL -->
+    <div id="sim-modal" class="hidden absolute top-16 right-16 z-40 w-64 glass-panel p-3 rounded-xl border border-slate-700 shadow-2xl">
+      <div class="text-[11px] font-semibold text-slate-300 mb-2 flex justify-between items-center uppercase tracking-wider">
+        <span>Set Viewpoint</span>
+        <button onclick="toggleSimMenu()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="space-y-1 text-xs">
+        <button onclick="setSimLocation('live')" class="w-full text-left px-2.5 py-2 rounded hover:bg-slate-800 flex justify-between items-center text-emerald-400 border border-emerald-500/20">
+          <span>📡 Live GPS Pos</span>
+        </button>
+        <div class="h-px bg-slate-800 my-1"></div>
+        <button onclick="setSimLocation('glencoe')" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300">🌄 Glen Coe</button>
+        <button onclick="setSimLocation('cairngorm')" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300">❄️ Cairn Gorm</button>
+        <button onclick="setSimLocation('nevis')" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300">⛰️ Ben Nevis</button>
+        <button onclick="setSimLocation('torridon')" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300">🗡️ Torridon</button>
+        <button onclick="setSimLocation('skye')" class="w-full text-left px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300">🌊 Skye (Cuillin)</button>
+      </div>
+    </div>
+
+    <!-- MAIN VIEW AREA -->
+    <main class="relative flex-1 w-full h-full overflow-hidden bg-slate-950">
+
+      <!-- VIEW 1: AR CAMERA -->
+      <div id="view-ar" class="absolute inset-0 w-full h-full">
+        <video id="camera-feed" class="w-full h-full object-cover" autoplay playsinline muted></video>
+        <canvas id="ar-canvas" class="absolute inset-0 w-full h-full pointer-events-auto cursor-grab"></canvas>
+        
+        <!-- Drag Hint (Disappears after use) -->
+        <div id="drag-hint" class="absolute top-20 left-1/2 -translate-x-1/2 z-20 glass-panel px-3 py-1.5 rounded-full text-[10px] text-cyan-300 flex items-center gap-1.5 border border-cyan-500/30">
+          <i data-lucide="move" class="w-3 h-3 animate-pulse"></i>
+          <span>Swipe to pan view</span>
+        </div>
+
+        <div class="absolute bottom-20 left-4 right-4 z-20 flex justify-between items-end pointer-events-none">
+          <div class="glass-panel p-2.5 rounded-xl text-center min-w-[90px] pointer-events-auto border border-cyan-500/30">
+            <p class="text-[9px] text-slate-400 uppercase tracking-widest font-mono">BEARING</p>
+            <p id="heading-val" class="text-xl font-bold font-mono text-cyan-400">000°</p>
+            <div id="pitch-val" class="text-[10px] text-slate-400 mt-0.5 font-mono">P: 0°</div>
+          </div>
+          <div class="glass-panel p-1.5 rounded-xl flex flex-col gap-1 pointer-events-auto text-xs border border-slate-700/50">
+            <button onclick="cycleFilter('type')" id="filter-type-btn" class="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-emerald-400 text-[10px] uppercase font-bold tracking-wider">Munros</button>
+            <button onclick="cycleFilter('range')" id="filter-range-btn" class="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-cyan-400 text-[10px] uppercase font-bold tracking-wider">35 km</button>
+          </div>
+        </div>
+
+        <div id="camera-fallback" class="hidden absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center z-10">
+          <i data-lucide="camera-off" class="w-12 h-12 text-slate-600 mb-3"></i>
+          <h3 class="text-sm font-bold text-slate-200">Camera Feed Blocked</h3>
+          <p class="text-[11px] text-slate-400 max-w-xs mt-1 mb-4 leading-relaxed">
+            Live AR camera requires HTTPS and media permissions. Showing tactical simulation. Swipe to look around.
+          </p>
+          <button onclick="requestCamera()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs rounded-lg transition">
+            Try Camera Again
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW 2: RADAR & MAP -->
+      <div id="view-radar" class="hidden absolute inset-0 w-full h-full bg-slate-950 p-4 flex flex-col items-center justify-center">
+        <h2 class="absolute top-20 left-4 text-xs font-bold text-slate-200 uppercase tracking-widest bg-slate-900 px-3 py-1 rounded-full border border-slate-800">Tactical Radar</h2>
+        
+        <div class="relative w-full max-w-md aspect-square glass-panel rounded-full flex items-center justify-center border border-slate-700/50 mt-8 shadow-2xl">
+          <canvas id="radar-canvas" class="w-full h-full rounded-full"></canvas>
+          
+          <!-- Crosshairs -->
+          <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div class="w-full h-px bg-cyan-500/20"></div>
+            <div class="h-full w-px bg-cyan-500/20"></div>
+            <!-- Ping animation -->
+            <div class="w-32 h-32 rounded-full border border-cyan-500/30 animate-ping opacity-20"></div>
+          </div>
+        </div>
+        
+        <div class="text-[11px] text-slate-400 mt-6 text-center max-w-xs">
+          Peaks mapped by relative distance. Rings adjust based on your <span class="text-cyan-400 font-bold" id="radar-range-text">35km</span> range filter.
+        </div>
+      </div>
+
+      <!-- VIEW 3: DIRECTORY -->
+      <div id="view-list" class="hidden absolute inset-0 w-full h-full bg-slate-950 p-4 pt-20 overflow-y-auto no-scrollbar">
+        <div class="max-w-md mx-auto space-y-3 pb-24">
+          <div class="flex gap-2 mb-3">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-500"></i>
+              <input type="text" id="peak-search" oninput="renderPeakList()" placeholder="Search peaks..." class="w-full bg-slate-900 border border-slate-800 text-xs text-slate-200 pl-9 pr-3 py-2 rounded-xl focus:outline-none focus:border-emerald-500">
+            </div>
+            <select id="peak-type-select" onchange="renderPeakList()" class="bg-slate-900 border border-slate-800 text-[11px] text-slate-300 px-2 py-2 rounded-xl focus:outline-none uppercase font-semibold">
+              <option value="ALL">All Types</option>
+              <option value="Munro">Munros</option>
+              <option value="Corbett">Corbetts</option>
+            </select>
+          </div>
+          <div class="flex justify-between items-end mb-2 px-1">
+            <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Closest to you</span>
+            <span id="peak-count-badge" class="text-[10px] text-emerald-400 font-bold">0</span>
+          </div>
+          <div id="peaks-list-container" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- VIEW 4: BAGGED -->
+      <div id="view-bagged" class="hidden absolute inset-0 w-full h-full bg-slate-950 p-4 pt-20 overflow-y-auto no-scrollbar">
+        <div class="max-w-md mx-auto space-y-4 pb-24">
+          <div class="glass-panel p-5 rounded-2xl border border-emerald-500/20 text-center relative overflow-hidden">
+            <i data-lucide="award" class="absolute -right-4 -bottom-4 w-24 h-24 opacity-10 text-emerald-400"></i>
+            <p class="text-[10px] uppercase tracking-widest text-emerald-400 font-bold mb-1">Munro Bagging Stats</p>
+            <div class="flex justify-center items-baseline gap-1 my-2">
+              <span id="bagged-count" class="text-5xl font-extrabold text-slate-100 font-mono">0</span>
+              <span class="text-xs text-slate-500 font-bold">/ 282</span>
+            </div>
+            <div class="w-full bg-slate-800/50 h-2 rounded-full overflow-hidden mt-4">
+              <div id="bagged-progress-bar" class="bg-gradient-to-r from-emerald-500 to-cyan-400 h-full w-0 transition-all duration-1000"></div>
+            </div>
+          </div>
+          <h3 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 px-1 mt-6">Summit Log</h3>
+          <div id="bagged-list-container" class="space-y-2"></div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- NAVIGATION BAR -->
+    <nav class="absolute bottom-0 left-0 right-0 z-30 glass-panel border-t border-slate-800/80 px-2 py-2 flex justify-around items-center pb-safe">
+      <button onclick="switchTab('ar')" id="nav-ar" class="nav-btn active text-emerald-400 flex flex-col items-center gap-1 p-2 transition">
+        <i data-lucide="view" class="w-5 h-5"></i>
+        <span class="text-[9px] font-bold tracking-wide">AR</span>
+      </button>
+      <button onclick="switchTab('radar')" id="nav-radar" class="nav-btn text-slate-500 hover:text-slate-300 flex flex-col items-center gap-1 p-2 transition">
+        <i data-lucide="radar" class="w-5 h-5"></i>
+        <span class="text-[9px] font-bold tracking-wide">RADAR</span>
+      </button>
+      <button onclick="switchTab('list')" id="nav-list" class="nav-btn text-slate-500 hover:text-slate-300 flex flex-col items-center gap-1 p-2 transition">
+        <i data-lucide="list-filter" class="w-5 h-5"></i>
+        <span class="text-[9px] font-bold tracking-wide">GUIDE</span>
+      </button>
+      <button onclick="switchTab('bagged')" id="nav-bagged" class="nav-btn text-slate-500 hover:text-slate-300 flex flex-col items-center gap-1 p-2 transition">
+        <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+        <span class="text-[9px] font-bold tracking-wide">BAGGED</span>
+      </button>
+    </nav>
+
+    <!-- PEAK DRAWER & AI SUMMARY -->
+    <div id="peak-drawer" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end transition-all">
+      <div class="bg-slate-900 border-t border-slate-700 rounded-t-3xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-200">
+        <div class="p-4 border-b border-slate-800/60 flex justify-between items-start bg-slate-900/90 sticky top-0 z-10">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span id="drawer-type-badge" class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase">MUNRO</span>
+              <span id="drawer-region" class="text-[10px] text-slate-400 uppercase tracking-wider">Glen Coe</span>
+            </div>
+            <h2 id="drawer-title" class="text-xl font-extrabold text-slate-100">Ben Nevis</h2>
+            <p id="drawer-coords" class="text-[11px] font-mono text-cyan-400 mt-0.5">1,345m • Dist: 4.2 km</p>
+          </div>
+          <button onclick="closeDrawer()" class="p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white transition">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="p-4 overflow-y-auto space-y-4 no-scrollbar">
+          <div class="flex gap-2">
+            <button id="bag-toggle-btn" onclick="toggleBaggedState()" class="flex-1 py-3 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/50 transition">
+              <i data-lucide="check-circle" class="w-4 h-4"></i>
+              <span id="bag-btn-text">Mark Bagged</span>
+            </button>
+            <button onclick="copyPeakCoords()" class="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs flex items-center gap-2 border border-slate-700 transition">
+              <i data-lucide="copy" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50">
+              <span class="text-slate-500 block text-[9px] uppercase font-bold tracking-wider mb-1">Total Ascent</span>
+              <span id="spec-ascent" class="font-bold text-slate-200">950m</span>
+            </div>
+            <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50">
+              <span class="text-slate-500 block text-[9px] uppercase font-bold tracking-wider mb-1">Terrain</span>
+              <span id="spec-terrain" class="font-bold text-amber-400">Scramble</span>
+            </div>
+          </div>
+
+          <div class="glass-panel p-4 rounded-2xl border border-cyan-500/20 space-y-3 relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-3 opacity-10 text-cyan-400 pointer-events-none">
+              <i data-lucide="sparkles" class="w-16 h-16"></i>
+            </div>
+            <div class="flex items-center justify-between border-b border-slate-700/50 pb-2 relative z-10">
+              <div class="flex items-center gap-1.5 text-cyan-400 font-bold text-[10px] uppercase tracking-widest">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> AI Trail Guide
+              </div>
+            </div>
+            <div id="ai-loading" class="hidden py-4 text-center space-y-2 relative z-10">
+              <div class="inline-block w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-[11px] text-slate-400">Analyzing routes & local data...</p>
+            </div>
+            <div id="ai-content" class="text-xs text-slate-300 leading-relaxed space-y-3 relative z-10"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EMERGENCY MODAL -->
+    <div id="emergency-modal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="bg-slate-900 border border-rose-500/40 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl relative">
+        <button onclick="closeEmergencyModal()" class="absolute top-4 right-4 text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+          <div class="p-2 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30"><i data-lucide="shield-alert" class="w-6 h-6"></i></div>
+          <div>
+            <h3 class="font-bold text-rose-400 text-sm">Emergency Info</h3>
+            <p class="text-[10px] text-slate-400 uppercase tracking-wider">Your exact location</p>
+          </div>
+        </div>
+        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2 font-mono text-[11px]">
+          <div class="flex justify-between text-slate-300"><span>Lat/Lon:</span><span id="em-latlon" class="text-cyan-400 font-bold">...</span></div>
+          <div class="flex justify-between text-slate-300"><span>Grid Ref:</span><span id="em-gridref" class="text-emerald-400 font-bold">...</span></div>
+          <div class="flex justify-between text-slate-300"><span>Altitude:</span><span id="em-alt" class="text-amber-400 font-bold">...</span></div>
+        </div>
+        <button onclick="copyEmergencyPayload()" class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl flex justify-center gap-2">
+          <i data-lucide="copy" class="w-4 h-4"></i> Copy Coordinates
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const apiKey = ""; 
+
+    async function callGeminiAPI(payload, retries = 3, delay = 1000) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+          const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+          if (res.ok) return await res.json();
+        } catch (err) {}
+        await new Promise(r => setTimeout(r, delay * Math.pow(2, attempt)));
+      }
+      throw new Error("API Connection Failed");
+    }
+
+    const PEAKS_DATABASE = [
+      { id: 'ben-nevis', name: 'Ben Nevis', type: 'Munro', heightM: 1345, lat: 56.7969, lon: -5.0036, region: 'Fort William', ascent: '1350m', terrain: 'Mountain Path / Scramble' },
+      { id: 'ben-macdui', name: 'Ben Macdui', type: 'Munro', heightM: 1309, lat: 57.0704, lon: -3.6691, region: 'Cairngorms', ascent: '930m', terrain: 'Exposed Plateau' },
+      { id: 'braeriach', name: 'Braeriach', type: 'Munro', heightM: 1296, lat: 57.0781, lon: -3.7283, region: 'Cairngorms', ascent: '1200m', terrain: 'Wild Remote Ridge' },
+      { id: 'cairn-gorm', name: 'Cairn Gorm', type: 'Munro', heightM: 1245, lat: 57.1167, lon: -3.6433, region: 'Cairngorms', ascent: '620m', terrain: 'Mountain Track' },
+      { id: 'stob-dearg', name: 'Buachaille Etive Mòr', type: 'Munro', heightM: 1022, lat: 56.6477, lon: -4.8978, region: 'Glen Coe', ascent: '740m', terrain: 'Steep Scree' },
+      { id: 'bidean-nam-bian', name: 'Bidean nam Bian', type: 'Munro', heightM: 1150, lat: 56.6433, lon: -5.0289, region: 'Glen Coe', ascent: '115
