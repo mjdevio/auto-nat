@@ -1,0 +1,16 @@
+{
+  "name": "Munro AR Compass",
+  "short_name": "MunroAR",
+  "description": "AR Compass and Map for Scottish Munros",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e293b",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cGF0aCBkPSJNMTAgOTBoODBMMTUgMjB6IiBmaWxsPSIjMDZhMzRkIi8+PC9zdmc+",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
