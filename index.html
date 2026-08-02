@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
 </head>
 <body class="h-full w-full overflow-hidden select-none font-sans bg-slate-50 text-slate-900">
 
@@ -309,6 +310,7 @@
   {
     "id": "beinn-chorranach",
     "name": "Beinn Chorranach",
+    "type": "Munro",
     "type": "Munro",
     "heightM": 2780.0,
     "lat": 56.24667,
@@ -9910,3 +9912,343 @@
     "region": "United Kingdom"
   }
 ];
+    // State
+    let currentFilterType = "ALL";
+    let currentFilterRange = 35; // km
+    let isSimulating = false;
+    let locationData = { lat: 0, lon: 0, alt: 0, heading: 0, pitch: 0 };
+    let stream = null;
+    let map = null;
+    let markers = [];
+
+    const BAGGED_KEY = "bagged_peaks";
+    let baggedPeaks = JSON.parse(localStorage.getItem(BAGGED_KEY) || "[]");
+
+    // Initialize Lucide icons
+    document.addEventListener("DOMContentLoaded", () => {
+        lucide.createIcons();
+    });
+
+    // Core Functions
+    function switchTab(tabId) {
+      document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.remove("text-emerald-400"));
+      document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.add("text-slate-500"));
+      const activeBtn = document.getElementById("nav-" + tabId);
+      if(activeBtn) {
+          activeBtn.classList.add("text-emerald-400");
+          activeBtn.classList.remove("text-slate-500");
+      }
+
+      document.getElementById("view-ar").classList.add("hidden");
+      document.getElementById("view-radar").classList.add("hidden");
+      document.getElementById("view-list").classList.add("hidden");
+      document.getElementById("view-bagged").classList.add("hidden");
+      document.getElementById("view-map").classList.add("hidden");
+
+      const targetView = document.getElementById("view-" + tabId);
+      if(targetView) targetView.classList.remove("hidden");
+
+      if (tabId === "map") {
+          initMap();
+      }
+    }
+
+    function toggleSimMenu() {
+      const modal = document.getElementById("sim-modal");
+      modal.classList.toggle("hidden");
+    }
+
+    function setSimLocation(locId) {
+      isSimulating = locId !== "live";
+      const statusEl = document.getElementById("location-status");
+
+      if (isSimulating) {
+        statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> Sim: ${locId}`;
+
+        // Mock locations
+        const mocks = {
+            "glencoe": { lat: 56.666, lon: -5.045, alt: 200 },
+            "cairngorm": { lat: 57.141, lon: -3.670, alt: 600 },
+            "nevis": { lat: 56.796, lon: -5.003, alt: 1300 },
+            "torridon": { lat: 57.550, lon: -5.500, alt: 100 },
+            "skye": { lat: 57.210, lon: -6.200, alt: 300 }
+        };
+        if(mocks[locId]) {
+            locationData.lat = mocks[locId].lat;
+            locationData.lon = mocks[locId].lon;
+            locationData.alt = mocks[locId].alt;
+        }
+      } else {
+        statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Live GPS`;
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition(
+                (pos) => {
+                    locationData.lat = pos.coords.latitude;
+                    locationData.lon = pos.coords.longitude;
+                    locationData.alt = pos.coords.altitude || 0;
+                    statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> GPS Active`;
+                    renderPeakList();
+                    if(map) {
+                        map.setView([locationData.lat, locationData.lon]);
+                    }
+                },
+                (err) => console.warn(err),
+                { enableHighAccuracy: true }
+            );
+        }
+      }
+      toggleSimMenu();
+      renderPeakList();
+      if(map) {
+          map.setView([locationData.lat, locationData.lon], 11);
+      }
+    }
+
+    async function requestSensorPermissions() {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+            try {
+                const permissionState = await DeviceOrientationEvent.requestPermission();
+                if (permissionState === "granted") {
+                    window.addEventListener("deviceorientation", handleOrientation);
+                    document.getElementById("sensor-auth-btn").classList.replace("bg-emerald-600/90", "bg-cyan-600/90");
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        } else {
+            window.addEventListener("deviceorientation", handleOrientation);
+            document.getElementById("sensor-auth-btn").classList.replace("bg-emerald-600/90", "bg-cyan-600/90");
+        }
+        requestCamera();
+    }
+
+    function handleOrientation(event) {
+        let heading = event.alpha;
+        if (event.webkitCompassHeading) {
+            heading = event.webkitCompassHeading;
+        }
+        if (heading) {
+            locationData.heading = heading;
+            document.getElementById("heading-val").innerText = Math.round(heading).toString().padStart(3, "0") + "°";
+        }
+
+        let pitch = event.beta;
+        if(pitch) {
+            locationData.pitch = pitch;
+            document.getElementById("pitch-val").innerText = "P: " + Math.round(pitch) + "°";
+        }
+    }
+
+    async function requestCamera() {
+        const fallback = document.getElementById("camera-fallback");
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            document.getElementById("camera-feed").srcObject = stream;
+            fallback.classList.add("hidden");
+        } catch (err) {
+            console.error("Camera error:", err);
+            fallback.classList.remove("hidden");
+        }
+    }
+
+    function openEmergencyModal() {
+        document.getElementById("emergency-modal").classList.remove("hidden");
+        document.getElementById("em-latlon").innerText = `${locationData.lat.toFixed(5)}, ${locationData.lon.toFixed(5)}`;
+        document.getElementById("em-alt").innerText = `${Math.round(locationData.alt)}m`;
+        // Dummy grid ref for demo
+        document.getElementById("em-gridref").innerText = "NN 123 456";
+    }
+
+    function closeEmergencyModal() {
+        document.getElementById("emergency-modal").classList.add("hidden");
+    }
+
+    function copyEmergencyPayload() {
+        const text = `Emergency! Lat/Lon: ${locationData.lat.toFixed(5)}, ${locationData.lon.toFixed(5)}`;
+        navigator.clipboard.writeText(text);
+        alert("Coordinates copied!");
+    }
+
+    function cycleFilter(type) {
+        if (type === "type") {
+            const types = ["ALL", "Munro", "Corbett"];
+            const idx = types.indexOf(currentFilterType);
+            currentFilterType = types[(idx + 1) % types.length];
+            document.getElementById("filter-type-btn").innerText = currentFilterType === "ALL" ? "All Types" : currentFilterType + "s";
+            document.getElementById("peak-type-select").value = currentFilterType;
+        } else if (type === "range") {
+            const ranges = [5, 10, 35, 50, 100];
+            const idx = ranges.indexOf(currentFilterRange);
+            currentFilterRange = ranges[(idx + 1) % ranges.length];
+            document.getElementById("filter-range-btn").innerText = currentFilterRange + " km";
+            document.getElementById("radar-range-text").innerText = currentFilterRange + "km";
+        }
+        renderPeakList();
+    }
+
+    // Helper: Haversine distance
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    function renderPeakList() {
+        const container = document.getElementById("peaks-list-container");
+        const baggedContainer = document.getElementById("bagged-list-container");
+        const searchTerm = document.getElementById("peak-search") ? document.getElementById("peak-search").value.toLowerCase() : "";
+        const typeSelect = document.getElementById("peak-type-select") ? document.getElementById("peak-type-select").value : "ALL";
+        currentFilterType = typeSelect;
+
+        if (!container || !baggedContainer) return;
+
+        let filteredPeaks = PEAKS_DATABASE.map(p => {
+            p.distance = calculateDistance(locationData.lat, locationData.lon, p.lat, p.lon);
+            return p;
+        }).filter(p => p.distance <= currentFilterRange);
+
+        if (currentFilterType !== "ALL") {
+            filteredPeaks = filteredPeaks.filter(p => p.type === currentFilterType);
+        }
+
+        if (searchTerm) {
+            filteredPeaks = filteredPeaks.filter(p => p.name.toLowerCase().includes(searchTerm));
+        }
+
+        filteredPeaks.sort((a, b) => a.distance - b.distance);
+
+        document.getElementById("peak-count-badge").innerText = filteredPeaks.length;
+
+        // Render List Tab
+        container.innerHTML = filteredPeaks.map(p => `
+            <div onclick="openDrawer('${p.id}')" class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-emerald-400 transition">
+                <div>
+                    <h4 class="text-sm font-bold text-slate-800">${p.name}</h4>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">${p.type} • ${p.heightM}m</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs font-bold text-cyan-500">${p.distance.toFixed(1)} km</span>
+                </div>
+            </div>
+        `).join("");
+
+        // Render Bagged Tab
+        const bagged = PEAKS_DATABASE.filter(p => baggedPeaks.includes(p.id));
+        document.getElementById("bagged-count").innerText = bagged.length;
+        const progress = (bagged.length / 282) * 100;
+        document.getElementById("bagged-progress-bar").style.width = Math.min(progress, 100) + "%";
+
+        baggedContainer.innerHTML = bagged.length ? bagged.map(p => `
+            <div onclick="openDrawer('${p.id}')" class="bg-white p-2.5 rounded-lg border border-emerald-500/30 flex items-center justify-between cursor-pointer">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>
+                    <span class="text-xs font-bold text-slate-700">${p.name}</span>
+                </div>
+                <span class="text-[10px] text-slate-400">${p.heightM}m</span>
+            </div>
+        `).join("") : `<div class="text-center text-xs text-slate-400 py-4">No peaks bagged yet.</div>`;
+
+        lucide.createIcons();
+        updateMapMarkers(filteredPeaks);
+    }
+
+    let activePeakId = null;
+
+    function openDrawer(peakId) {
+        const peak = PEAKS_DATABASE.find(p => p.id === peakId);
+        if (!peak) return;
+        activePeakId = peakId;
+
+        document.getElementById("drawer-title").innerText = peak.name;
+        document.getElementById("drawer-type-badge").innerText = peak.type;
+        document.getElementById("drawer-region").innerText = peak.region;
+        document.getElementById("drawer-coords").innerText = `${peak.heightM}m • Dist: ${peak.distance ? peak.distance.toFixed(1) : "?"} km`;
+
+        const isBagged = baggedPeaks.includes(peakId);
+        const bagBtn = document.getElementById("bag-toggle-btn");
+        if (isBagged) {
+            bagBtn.classList.replace("bg-emerald-600", "bg-amber-500");
+            bagBtn.classList.replace("hover:bg-emerald-500", "hover:bg-amber-400");
+            document.getElementById("bag-btn-text").innerText = "Unmark Bagged";
+        } else {
+            bagBtn.classList.replace("bg-amber-500", "bg-emerald-600");
+            bagBtn.classList.replace("hover:bg-amber-400", "hover:bg-emerald-500");
+            document.getElementById("bag-btn-text").innerText = "Mark Bagged";
+        }
+
+        document.getElementById("peak-drawer").classList.remove("hidden");
+    }
+
+    function closeDrawer() {
+        document.getElementById("peak-drawer").classList.add("hidden");
+        activePeakId = null;
+    }
+
+    function toggleBaggedState() {
+        if (!activePeakId) return;
+        if (baggedPeaks.includes(activePeakId)) {
+            baggedPeaks = baggedPeaks.filter(id => id !== activePeakId);
+        } else {
+            baggedPeaks.push(activePeakId);
+        }
+        localStorage.setItem(BAGGED_KEY, JSON.stringify(baggedPeaks));
+        openDrawer(activePeakId); // refresh
+        renderPeakList();
+    }
+
+    function copyPeakCoords() {
+        if (!activePeakId) return;
+        const peak = PEAKS_DATABASE.find(p => p.id === activePeakId);
+        if (peak) {
+            navigator.clipboard.writeText(`${peak.lat}, ${peak.lon}`);
+            alert("Peak coordinates copied!");
+        }
+    }
+
+    function initMap() {
+        if (map) return; // already init
+        map = L.map("leaflet-map", { zoomControl: false }).setView([locationData.lat || 56.8, locationData.lon || -4.0], 7);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "© OpenStreetMap"
+        }).addTo(map);
+        renderPeakList();
+    }
+
+    function updateMapMarkers(peaks) {
+        if (!map) return;
+        markers.forEach(m => map.removeLayer(m));
+        markers = [];
+
+        // Add user marker
+        const userIcon = L.divIcon({
+            html: `<div class="w-4 h-4 bg-cyan-500 rounded-full border-2 border-white shadow-lg animate-pulse"></div>`,
+            className: ""
+        });
+        const userM = L.marker([locationData.lat, locationData.lon], {icon: userIcon}).addTo(map);
+        markers.push(userM);
+
+        // Add peak markers (limit to top 50 to avoid clutter)
+        peaks.slice(0, 50).forEach(p => {
+            const isBagged = baggedPeaks.includes(p.id);
+            const icon = L.divIcon({
+                html: `<div class="w-3 h-3 ${isBagged ? 'bg-emerald-500' : 'bg-rose-500'} rounded-full border border-white shadow"></div>`,
+                className: ""
+            });
+            const m = L.marker([p.lat, p.lon], {icon}).addTo(map)
+                .bindPopup(`<b>${p.name}</b><br>${p.heightM}m<br><button onclick="openDrawer('${p.id}')" class="mt-1 text-xs text-blue-500 underline">View</button>`);
+            markers.push(m);
+        });
+    }
+
+    // Initialize with a mock location by default
+    document.addEventListener("DOMContentLoaded", () => {
+        setSimLocation("glencoe");
+    });
+  </script>
+</body>
+</html>
