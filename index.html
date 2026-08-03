@@ -74,7 +74,7 @@
           </div>
           <div class="glass-panel p-1.5 rounded-xl flex flex-col gap-1 pointer-events-auto text-xs border border-slate-300/50">
             <button onclick="toggleTypeModal()" id="filter-type-btn" class="px-3 py-1.5 rounded-lg bg-slate-100/80 hover:bg-slate-200 text-emerald-400 text-[10px] uppercase font-bold tracking-wider">ALL TYPES</button>
-            <button onclick="cycleFilter('range')" id="filter-range-btn" class="px-3 py-1.5 rounded-lg bg-slate-100/80 hover:bg-slate-200 text-cyan-400 text-[10px] uppercase font-bold tracking-wider">35 km</button>
+            <button onclick="cycleFilter('range')" id="filter-range-btn" class="px-3 py-1.5 rounded-lg bg-slate-100/80 hover:bg-slate-200 text-cyan-400 text-[10px] uppercase font-bold tracking-wider">5 km</button>
           </div>
         </div>
 
@@ -107,7 +107,7 @@
         </div>
         
         <div class="text-[11px] text-slate-500 mt-6 text-center max-w-xs">
-          Peaks mapped by relative distance. Rings adjust based on your <span class="text-cyan-400 font-bold" id="radar-range-text">35km</span> range filter.
+          Peaks mapped by relative distance. Rings adjust based on your <span class="text-cyan-400 font-bold" id="radar-range-text">5km</span> range filter.
         </div>
       </div>
 
@@ -121,9 +121,9 @@
                   <input type="text" id="peak-search" oninput="renderPeakList()" placeholder="Search..." class="w-full bg-white border border-slate-200 text-xs text-slate-800 pl-9 pr-3 py-2 rounded-xl focus:outline-none focus:border-emerald-500">
                 </div>
                 <select id="peak-range-select" onchange="updateRange(this.value)" class="bg-white border border-slate-200 text-[11px] text-slate-600 px-2 py-2 rounded-xl focus:outline-none uppercase font-semibold">
-                  <option value="5">5 km</option>
+                  <option value="5" selected>5 km</option>
                   <option value="10">10 km</option>
-                  <option value="35" selected>35 km</option>
+                  <option value="35">35 km</option>
                   <option value="50">50 km</option>
                   <option value="100">100 km</option>
                 </select>
@@ -305,7 +305,8 @@
     async function switchCamera() {
         try {
             const devices = await navigator.mediaDevices.enumerateDevices();
-            videoDevices = devices.filter(d => d.kind === 'videoinput');
+            // Ensure we only keep valid video devices
+            videoDevices = devices.filter(d => d.kind === 'videoinput' && d.deviceId);
         } catch (e) {
             console.warn("Could not enumerate devices", e);
         }
@@ -331,10 +332,10 @@
                 stream = null;
             }
 
-            // Short delay to allow hardware to release the camera, prevents mobile crashes
+            // Slightly longer delay to allow mobile hardware to fully release the camera
             setTimeout(async () => {
                 await requestCamera(videoDevices[currentDeviceIndex].deviceId);
-            }, 250);
+            }, 400);
         }
     }
 
@@ -490,7 +491,7 @@
 
     // State
     let activeFilters = ["Peaks", "Routes", "Amenities", "Places"];
-    let currentFilterRange = 35; // km
+    let currentFilterRange = 5; // km
     let locationData = { lat: 0, lon: 0, alt: 0, heading: 0, pitch: 0 };
     let stream = null;
     let map = null;
@@ -603,12 +604,18 @@
 
     async function requestCamera(deviceId = null) {
         const fallback = document.getElementById("camera-fallback");
+        const videoEl = document.getElementById("camera-feed");
         try {
+            // If we are passing an exact deviceId, DO NOT pass facingMode, as this causes over-constrained errors on mobile
             const constraints = {
                 video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" }
             };
             stream = await navigator.mediaDevices.getUserMedia(constraints);
-            document.getElementById("camera-feed").srcObject = stream;
+            videoEl.srcObject = stream;
+
+            // Ensure play is called and caught to prevent DOMExceptions
+            videoEl.play().catch(e => console.warn("Video play interrupted", e));
+
             fallback.classList.add("hidden");
         } catch (err) {
             console.error("Camera error:", err);
@@ -658,13 +665,11 @@
         pills.forEach(pill => {
             const pillFilter = pill.getAttribute('data-filter');
             if (pillFilter && activeFilters.includes(pillFilter)) {
-                pill.classList.replace('bg-white', 'bg-emerald-500');
-                pill.classList.replace('text-slate-600', 'text-white');
-                pill.classList.replace('border-slate-200', 'border-emerald-500');
+                pill.classList.remove('bg-white', 'text-slate-600', 'border-slate-200');
+                pill.classList.add('bg-emerald-500', 'text-white', 'border-emerald-500');
             } else {
-                pill.classList.replace('bg-emerald-500', 'bg-white');
-                pill.classList.replace('text-white', 'text-slate-600');
-                pill.classList.replace('border-emerald-500', 'border-slate-200');
+                pill.classList.remove('bg-emerald-500', 'text-white', 'border-emerald-500');
+                pill.classList.add('bg-white', 'text-slate-600', 'border-slate-200');
             }
         });
 
