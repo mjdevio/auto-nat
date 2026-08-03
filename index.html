@@ -40,17 +40,20 @@
       </div>
 
       <!-- Quick Actions (Right) -->
-      <div class="flex flex-col gap-2 pointer-events-auto">
+      <div class="flex flex-col gap-2 items-end pointer-events-auto">
         <!-- Sensor/Gyro -->
-        <button id="sensor-auth-btn" onclick="requestSensorPermissions()" class="w-10 h-10 bg-emerald-600/90 hover:bg-emerald-500 backdrop-blur-md rounded-xl text-white flex items-center justify-center border border-emerald-400/40 shadow-lg transition" title="Enable AR Gyro">
+        <button id="sensor-auth-btn" onclick="requestSensorPermissions()" class="h-10 px-3 bg-emerald-600/90 hover:bg-emerald-500 backdrop-blur-md rounded-xl text-white flex items-center gap-2 border border-emerald-400/40 shadow-lg transition" title="Enable AR Gyro">
+          <span class="text-[11px] font-bold tracking-wider">GYRO</span>
           <i data-lucide="compass" class="w-5 h-5"></i>
         </button>
         <!-- Switch Camera -->
-        <button onclick="switchCamera()" class="w-10 h-10 glass-panel hover:bg-slate-100 rounded-xl text-cyan-400 flex items-center justify-center border border-slate-300 shadow-lg transition" title="Switch Camera">
+        <button onclick="switchCamera()" class="h-10 px-3 glass-panel hover:bg-slate-100 rounded-xl text-cyan-400 flex items-center gap-2 border border-slate-300 shadow-lg transition" title="Switch Camera">
+          <span class="text-[11px] font-bold tracking-wider">CAMERA</span>
           <i data-lucide="switch-camera" class="w-5 h-5"></i>
         </button>
         <!-- Emergency -->
-        <button onclick="openEmergencyModal()" class="w-10 h-10 bg-rose-500/20 hover:bg-rose-500/30 backdrop-blur-md rounded-xl text-rose-400 flex items-center justify-center border border-rose-500/40 shadow-lg transition" title="Emergency Details">
+        <button onclick="openEmergencyModal()" class="h-10 px-3 bg-rose-500/20 hover:bg-rose-500/30 backdrop-blur-md rounded-xl text-rose-400 flex items-center gap-2 border border-rose-500/40 shadow-lg transition" title="Emergency Details">
+          <span class="text-[11px] font-bold tracking-wider">SOS</span>
           <i data-lucide="triangle-alert" class="w-5 h-5"></i>
         </button>
       </div>
@@ -301,8 +304,10 @@
     // Update Camera Switcher UI
     let videoDevices = [];
     let currentDeviceIndex = 0;
+    let cameraRetryCount = 0;
 
     async function switchCamera() {
+        cameraRetryCount = 0; // Reset retry count when manually switching
         try {
             const devices = await navigator.mediaDevices.enumerateDevices();
             // Ensure we only keep valid video devices
@@ -619,7 +624,16 @@
             fallback.classList.add("hidden");
         } catch (err) {
             console.error("Camera error:", err);
-            fallback.classList.remove("hidden");
+            if (deviceId && videoDevices.length > 1 && cameraRetryCount < videoDevices.length) {
+                console.warn(`Camera ${deviceId} failed, trying next...`);
+                cameraRetryCount++;
+                currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+                setTimeout(() => {
+                    requestCamera(videoDevices[currentDeviceIndex].deviceId);
+                }, 400);
+            } else {
+                fallback.classList.remove("hidden");
+            }
         }
     }
 
