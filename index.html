@@ -481,7 +481,7 @@
                 } catch (err) {
                     console.error("Overpass fetch failed:", err);
                     statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span> Data Fetch Failed`;
-                    alert(`Data Fetch Error: ${err.message}. ${err.message.includes('429') ? 'You may be rate limited. Please try again later.' : ''}`);
+                    console.warn(`Data Fetch Error: ${err.message}. ${err.message.includes('429') ? 'You may be rate limited. Please try again later.' : ''}`);
                 }
                 if (fetchResolve) {
                     fetchResolve();
@@ -582,6 +582,10 @@
         requestCamera();
     }
 
+    let lastHeading = null;
+    let lastPitch = null;
+    const filterAlpha = 0.15;
+
     function handleOrientation(event) {
         let heading = null;
         if (event.webkitCompassHeading !== undefined) {
@@ -591,8 +595,17 @@
         }
 
         if (heading !== null) {
-            locationData.heading = heading;
-            document.getElementById("heading-val").innerText = Math.round(heading).toString().padStart(3, "0") + "°";
+            if (lastHeading === null) {
+                lastHeading = heading;
+            } else {
+                let diff = heading - lastHeading;
+                if (diff > 180) diff -= 360;
+                if (diff < -180) diff += 360;
+                lastHeading = (lastHeading + diff * filterAlpha + 360) % 360;
+            }
+
+            locationData.heading = lastHeading;
+            document.getElementById("heading-val").innerText = Math.round(lastHeading).toString().padStart(3, "0") + "°";
         }
 
         let pitch = null;
@@ -602,8 +615,13 @@
         }
 
         if(pitch !== null) {
-            locationData.pitch = pitch;
-            document.getElementById("pitch-val").innerText = "P: " + Math.round(pitch) + "°";
+            if (lastPitch === null) {
+                lastPitch = pitch;
+            } else {
+                lastPitch = lastPitch + (pitch - lastPitch) * filterAlpha;
+            }
+            locationData.pitch = lastPitch;
+            document.getElementById("pitch-val").innerText = "P: " + Math.round(lastPitch) + "°";
         }
     }
 
@@ -652,7 +670,7 @@
     function copyEmergencyPayload() {
         const text = `Emergency! Lat/Lon: ${locationData.lat.toFixed(5)}, ${locationData.lon.toFixed(5)}`;
         navigator.clipboard.writeText(text);
-        alert("Coordinates copied!");
+        console.log("Coordinates copied!");
     }
 
     function updateRange(val) {
@@ -822,7 +840,7 @@
         const peak = PEAKS_DATABASE.find(p => p.id === activePeakId);
         if (peak) {
             navigator.clipboard.writeText(`${peak.lat}, ${peak.lon}`);
-            alert("Peak coordinates copied!");
+            console.log("Peak coordinates copied!");
         }
     }
 
