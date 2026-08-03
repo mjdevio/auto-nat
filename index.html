@@ -290,13 +290,12 @@
     let currentDeviceIndex = 0;
 
     async function switchCamera() {
-        if (videoDevices.length === 0) {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                videoDevices = devices.filter(d => d.kind === 'videoinput');
-            } catch (e) {
-                console.warn("Could not enumerate devices", e);
-            }
+        try {
+            // Re-enumerate every time so that we can get device IDs after permissions are granted
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            videoDevices = devices.filter(d => d.kind === 'videoinput');
+        } catch (e) {
+            console.warn("Could not enumerate devices", e);
         }
 
         if (videoDevices.length > 1) {
@@ -309,6 +308,9 @@
     }
 
     async function fetchOverpassData(lat, lon, rangeKm) {
+        if (isFetchingData) return;
+        isFetchingData = true;
+
         const statusEl = document.getElementById("location-status");
         statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> Fetching local data...`;
 
@@ -383,12 +385,15 @@
             }
 
             PEAKS_DATABASE = newDatabase;
+            hasFetchedData = true;
             statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> GPS/Data Active`;
             renderPeakList();
 
         } catch (err) {
             console.error("Overpass fetch failed:", err);
             statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span> Data Fetch Failed`;
+        } finally {
+            isFetchingData = false;
         }
     }
 
@@ -400,6 +405,8 @@
     let stream = null;
     let map = null;
     let markers = [];
+    let hasFetchedData = false;
+    let isFetchingData = false;
 
     // Initialize Lucide icons
     document.addEventListener("DOMContentLoaded", () => {
@@ -446,8 +453,8 @@
                     locationData.alt = pos.coords.altitude || 0;
                     statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> GPS Active`;
 
-                    // Re-fetch data if moved more than 5km or DB is empty
-                    if (PEAKS_DATABASE.length === 0 || distMoved > 5) {
+                    // Re-fetch data if moved more than 5km or haven't fetched yet
+                    if (!hasFetchedData || distMoved > 5) {
                         fetchOverpassData(locationData.lat, locationData.lon, currentFilterRange);
                     } else {
                         renderPeakList();
@@ -510,7 +517,7 @@
         const fallback = document.getElementById("camera-fallback");
         try {
             const constraints = {
-                video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" }
+                video: (deviceId && typeof deviceId === 'string') ? { deviceId: { exact: deviceId } } : { facingMode: "environment" }
             };
             stream = await navigator.mediaDevices.getUserMedia(constraints);
             document.getElementById("camera-feed").srcObject = stream;
