@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Auto-Nat - Scottish Mountain AR</title>
+  <title>Aulay Outdoors</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
@@ -32,7 +32,7 @@
       <!-- Branding & Status (Left) -->
       <div class="glass-panel px-3 py-2 rounded-xl pointer-events-auto shadow-lg flex flex-col gap-0.5 border-slate-300/50">
         <h1 class="font-bold text-[13px] tracking-wide text-emerald-400 flex items-center gap-1.5">
-          <i data-lucide="mountain-snow" class="w-4 h-4"></i> AUTO-NAT
+          <i data-lucide="mountain-snow" class="w-4 h-4"></i> AULAY OUTDOORS
         </h1>
         <p id="location-status" class="text-[9px] text-slate-500 flex items-center gap-1 uppercase tracking-wider">
           <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Waiting for sensors
@@ -100,7 +100,7 @@
             <div id="pitch-val" class="text-[10px] text-slate-500 mt-0.5 font-mono">P: 0°</div>
           </div>
           <div class="glass-panel p-1.5 rounded-xl flex flex-col gap-1 pointer-events-auto text-xs border border-slate-300/50">
-            <button onclick="cycleFilter('type')" id="filter-type-btn" class="px-3 py-1.5 rounded-lg bg-slate-100/80 hover:bg-slate-200 text-emerald-400 text-[10px] uppercase font-bold tracking-wider">Munros</button>
+            <button onclick="cycleFilter('type')" id="filter-type-btn" class="px-3 py-1.5 rounded-lg bg-slate-100/80 hover:bg-slate-200 text-emerald-400 text-[10px] uppercase font-bold tracking-wider">ALL TYPES</button>
             <button onclick="cycleFilter('range')" id="filter-range-btn" class="px-3 py-1.5 rounded-lg bg-slate-100/80 hover:bg-slate-200 text-cyan-400 text-[10px] uppercase font-bold tracking-wider">35 km</button>
           </div>
         </div>
@@ -141,21 +141,28 @@
       <!-- VIEW 3: DIRECTORY -->
       <div id="view-list" class="hidden absolute inset-0 w-full h-full bg-slate-50 p-4 pt-20 overflow-y-auto no-scrollbar" style="z-index: 10;">
         <div class="max-w-md mx-auto space-y-3 pb-24">
-          <div class="flex gap-2 mb-3">
-            <div class="relative flex-1">
-              <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-500"></i>
-              <input type="text" id="peak-search" oninput="renderPeakList()" placeholder="Search peaks..." class="w-full bg-white border border-slate-200 text-xs text-slate-800 pl-9 pr-3 py-2 rounded-xl focus:outline-none focus:border-emerald-500">
+          <div class="flex flex-col gap-3 mb-3">
+            <div class="flex gap-2">
+                <div class="relative flex-1">
+                  <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-500"></i>
+                  <input type="text" id="peak-search" oninput="renderPeakList()" placeholder="Search..." class="w-full bg-white border border-slate-200 text-xs text-slate-800 pl-9 pr-3 py-2 rounded-xl focus:outline-none focus:border-emerald-500">
+                </div>
+                <select id="peak-range-select" onchange="updateRange(this.value)" class="bg-white border border-slate-200 text-[11px] text-slate-600 px-2 py-2 rounded-xl focus:outline-none uppercase font-semibold">
+                  <option value="5">5 km</option>
+                  <option value="10">10 km</option>
+                  <option value="35" selected>35 km</option>
+                  <option value="50">50 km</option>
+                  <option value="100">100 km</option>
+                </select>
             </div>
-            <select id="peak-type-select" onchange="renderPeakList()" class="bg-white border border-slate-200 text-[11px] text-slate-600 px-2 py-2 rounded-xl focus:outline-none uppercase font-semibold">
-              <option value="ALL">All Types</option>
-              <option value="Munro">Peaks & Munros</option>
-              <option value="Corbett">Hills & Corbetts</option>
-              <option value="Toilet">Toilets</option>
-              <option value="Cafe">Cafes</option>
-              <option value="Pub">Pubs</option>
-              <option value="Viewpoint">Viewpoints</option>
-              <option value="Route">Routes</option>
-            </select>
+
+            <!-- Filter Pills -->
+            <div class="flex flex-wrap gap-1.5" id="filter-pills">
+              <button onclick="toggleFilter('Peaks')" class="filter-pill active px-2.5 py-1 rounded-full border border-emerald-500 bg-emerald-500 text-white text-[10px] uppercase font-bold tracking-wider transition">Peaks</button>
+              <button onclick="toggleFilter('Routes')" class="filter-pill active px-2.5 py-1 rounded-full border border-emerald-500 bg-emerald-500 text-white text-[10px] uppercase font-bold tracking-wider transition">Routes</button>
+              <button onclick="toggleFilter('Amenities')" class="filter-pill active px-2.5 py-1 rounded-full border border-emerald-500 bg-emerald-500 text-white text-[10px] uppercase font-bold tracking-wider transition">Amenities</button>
+              <button onclick="toggleFilter('Places')" class="filter-pill active px-2.5 py-1 rounded-full border border-emerald-500 bg-emerald-500 text-white text-[10px] uppercase font-bold tracking-wider transition">Places</button>
+            </div>
           </div>
           <div class="flex justify-between items-end mb-2 px-1">
             <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Closest to you</span>
@@ -165,24 +172,6 @@
         </div>
       </div>
 
-      <!-- VIEW 4: BAGGED -->
-      <div id="view-bagged" class="hidden absolute inset-0 w-full h-full bg-slate-50 p-4 pt-20 overflow-y-auto no-scrollbar" style="z-index: 10;">
-        <div class="max-w-md mx-auto space-y-4 pb-24">
-          <div class="glass-panel p-5 rounded-2xl border border-emerald-500/20 text-center relative overflow-hidden">
-            <i data-lucide="award" class="absolute -right-4 -bottom-4 w-24 h-24 opacity-10 text-emerald-400"></i>
-            <p class="text-[10px] uppercase tracking-widest text-emerald-400 font-bold mb-1">Munro Bagging Stats</p>
-            <div class="flex justify-center items-baseline gap-1 my-2">
-              <span id="bagged-count" class="text-5xl font-extrabold text-slate-900 font-mono">0</span>
-              <span class="text-xs text-slate-500 font-bold">/ 282</span>
-            </div>
-            <div class="w-full bg-slate-100/50 h-2 rounded-full overflow-hidden mt-4">
-              <div id="bagged-progress-bar" class="bg-gradient-to-r from-emerald-500 to-cyan-400 h-full w-0 transition-all duration-1000"></div>
-            </div>
-          </div>
-          <h3 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 px-1 mt-6">Summit Log</h3>
-          <div id="bagged-list-container" class="space-y-2"></div>
-        </div>
-      </div>
 
 
       <!-- VIEW 5: MAP -->
@@ -205,10 +194,6 @@
       <button onclick="switchTab('list')" id="nav-list" class="nav-btn text-slate-500 hover:text-slate-600 flex flex-col items-center gap-1 p-2 transition">
         <i data-lucide="list-filter" class="w-5 h-5"></i>
         <span class="text-[9px] font-bold tracking-wide">GUIDE</span>
-      </button>
-      <button onclick="switchTab('bagged')" id="nav-bagged" class="nav-btn text-slate-500 hover:text-slate-600 flex flex-col items-center gap-1 p-2 transition">
-        <i data-lucide="check-circle-2" class="w-5 h-5"></i>
-        <span class="text-[9px] font-bold tracking-wide">BAGGED</span>
       </button>
 
       <button onclick="switchTab('map')" id="nav-map" class="nav-btn text-slate-500 hover:text-slate-600 flex flex-col items-center gap-1 p-2 transition">
@@ -237,16 +222,12 @@
 
         <div class="p-4 overflow-y-auto space-y-4 no-scrollbar">
           <div class="flex gap-2">
-            <button id="bag-toggle-btn" onclick="toggleBaggedState()" class="flex-1 py-3 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/50 transition">
-              <i data-lucide="check-circle" class="w-4 h-4"></i>
-              <span id="bag-btn-text">Mark Bagged</span>
-            </button>
-            <button onclick="copyPeakCoords()" class="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-xs flex items-center gap-2 border border-slate-300 transition">
-              <i data-lucide="copy" class="w-4 h-4"></i>
+            <button onclick="copyPeakCoords()" class="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border border-slate-300 transition">
+              <i data-lucide="copy" class="w-4 h-4"></i> Copy Coordinates
             </button>
           </div>
 
-          <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="grid grid-cols-2 gap-2 text-xs hidden" id="spec-grid">
             <div class="bg-slate-100/40 p-3 rounded-xl border border-slate-300/50">
               <span class="text-slate-500 block text-[9px] uppercase font-bold tracking-wider mb-1">Total Ascent</span>
               <span id="spec-ascent" class="font-bold text-slate-800">950m</span>
@@ -301,29 +282,43 @@
   </div>
 
   <script>
-    const apiKey = ""; 
-
-    async function callGeminiAPI(payload, retries = 3, delay = 1000) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-      for (let attempt = 0; attempt < retries; attempt++) {
+    async function fetchWikipediaSummary(title) {
         try {
-          const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-          if (res.ok) return await res.json();
-        } catch (err) {}
-        await new Promise(r => setTimeout(r, delay * Math.pow(2, attempt)));
-      }
-      throw new Error("API Connection Failed");
+            const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
+            if (res.ok) {
+                const data = await res.json();
+                return data.extract || "No description available on Wikipedia.";
+            }
+        } catch (err) {
+            console.error("Wikipedia API error", err);
+        }
+        return "Could not load summary information.";
     }
 
     let PEAKS_DATABASE = [];
     // Update Camera Switcher UI
-    let currentFacingMode = "environment";
+    let videoDevices = [];
+    let currentDeviceIndex = 0;
+
     async function switchCamera() {
-        currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
+        if (isSimulating) return; // don't try to switch if camera is disabled
+
+        if (videoDevices.length === 0) {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                videoDevices = devices.filter(d => d.kind === 'videoinput');
+            } catch (e) {
+                console.warn("Could not enumerate devices", e);
+            }
         }
-        await requestCamera();
+
+        if (videoDevices.length > 1) {
+            currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            await requestCamera(videoDevices[currentDeviceIndex].deviceId);
+        }
     }
 
     async function fetchOverpassData(lat, lon, rangeKm) {
@@ -343,6 +338,7 @@
               node["natural"~"peak|hill"]${bbox};
               node["amenity"~"toilets|cafe|pub"]${bbox};
               node["tourism"~"viewpoint"]${bbox};
+              node["place"~"town|village"]${bbox};
               way["route"~"hiking|foot|bicycle"]${bbox};
               relation["route"~"hiking|foot|bicycle"]${bbox};
             );
@@ -383,6 +379,8 @@
                     else if (element.tags.amenity === "cafe") { type = "Cafe"; name = element.tags.name || "Cafe"; height = 0;}
                     else if (element.tags.amenity === "pub") { type = "Pub"; name = element.tags.name || "Pub"; height = 0;}
                     else if (element.tags.tourism === "viewpoint") { type = "Viewpoint"; name = element.tags.name || "Viewpoint"; height = 0;}
+                    else if (element.tags.place === "town") { type = "Town"; name = element.tags.name || "Town"; height = 0;}
+                    else if (element.tags.place === "village") { type = "Village"; name = element.tags.name || "Village"; height = 0;}
                     else if (element.tags.route) { type = "Route"; name = element.tags.name || (element.tags.route + " Route"); height = 0;}
 
                     newDatabase.push({
@@ -409,16 +407,13 @@
 
 
     // State
-    let currentFilterType = "ALL";
+    let activeFilters = ["Peaks", "Routes", "Amenities", "Places"];
     let currentFilterRange = 35; // km
     let isSimulating = false;
     let locationData = { lat: 0, lon: 0, alt: 0, heading: 0, pitch: 0 };
     let stream = null;
     let map = null;
     let markers = [];
-
-    const BAGGED_KEY = "bagged_peaks";
-    let baggedPeaks = JSON.parse(localStorage.getItem(BAGGED_KEY) || "[]");
 
     // Initialize Lucide icons
     document.addEventListener("DOMContentLoaded", () => {
@@ -438,7 +433,6 @@
       document.getElementById("view-ar").classList.add("hidden");
       document.getElementById("view-radar").classList.add("hidden");
       document.getElementById("view-list").classList.add("hidden");
-      document.getElementById("view-bagged").classList.add("hidden");
       document.getElementById("view-map").classList.add("hidden");
 
       const targetView = document.getElementById("view-" + tabId);
@@ -458,8 +452,20 @@
       isSimulating = locId !== "live";
       const statusEl = document.getElementById("location-status");
 
+      const fallback = document.getElementById("camera-fallback");
+      const videoFeed = document.getElementById("camera-feed");
+
       if (isSimulating) {
         statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> Sim: ${locId}`;
+
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+            videoFeed.srcObject = null;
+        }
+        fallback.classList.remove("hidden");
+        fallback.innerHTML = `<i data-lucide="satellite" class="w-12 h-12 text-slate-600 mb-3"></i><h3 class="text-sm font-bold text-slate-800">Tactical Simulation</h3><p class="text-[11px] text-slate-500 max-w-xs mt-1 mb-4 leading-relaxed">Camera disabled. Showing simulated location. Swipe to look around.</p>`;
+        lucide.createIcons();
 
         // Mock locations
         const mocks = {
@@ -475,6 +481,9 @@
             locationData.alt = mocks[locId].alt;
         }
       } else {
+        fallback.innerHTML = `<i data-lucide="camera-off" class="w-12 h-12 text-slate-600 mb-3"></i><h3 class="text-sm font-bold text-slate-800">Camera Feed Blocked</h3><p class="text-[11px] text-slate-500 max-w-xs mt-1 mb-4 leading-relaxed">Live AR camera requires HTTPS and media permissions. Showing tactical simulation. Swipe to look around.</p><button id="btn-req-camera" onclick="requestCamera()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs rounded-lg transition">Try Camera Again</button>`;
+        lucide.createIcons();
+        requestCamera();
         statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Live GPS`;
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition(
@@ -530,26 +539,38 @@
     }
 
     function handleOrientation(event) {
-        let heading = event.alpha;
-        if (event.webkitCompassHeading) {
+        let heading = null;
+        if (event.webkitCompassHeading !== undefined) {
             heading = event.webkitCompassHeading;
+        } else if (event.alpha !== null) {
+            heading = (360 - event.alpha) % 360;
         }
-        if (heading) {
+
+        if (heading !== null) {
             locationData.heading = heading;
             document.getElementById("heading-val").innerText = Math.round(heading).toString().padStart(3, "0") + "°";
         }
 
-        let pitch = event.beta;
-        if(pitch) {
+        let pitch = null;
+        if (event.beta !== null && event.gamma !== null) {
+            // For standard portrait viewing
+            pitch = event.beta - 90;
+        }
+
+        if(pitch !== null) {
             locationData.pitch = pitch;
             document.getElementById("pitch-val").innerText = "P: " + Math.round(pitch) + "°";
         }
     }
 
-    async function requestCamera() {
+    async function requestCamera(deviceId = null) {
+        if (isSimulating) return;
         const fallback = document.getElementById("camera-fallback");
         try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
+            const constraints = {
+                video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" }
+            };
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
             document.getElementById("camera-feed").srcObject = stream;
             fallback.classList.add("hidden");
         } catch (err) {
@@ -576,21 +597,89 @@
         alert("Coordinates copied!");
     }
 
+    function updateRange(val) {
+        currentFilterRange = parseInt(val, 10);
+        document.getElementById("filter-range-btn").innerText = currentFilterRange + " km";
+        document.getElementById("radar-range-text").innerText = currentFilterRange + "km";
+        if (document.getElementById("peak-range-select")) {
+            document.getElementById("peak-range-select").value = currentFilterRange;
+        }
+        fetchOverpassData(locationData.lat, locationData.lon, currentFilterRange);
+    }
+
+    function toggleFilter(filterName) {
+        if (!filterName) return;
+        const idx = activeFilters.indexOf(filterName);
+        if (idx > -1) {
+            activeFilters.splice(idx, 1);
+        } else {
+            activeFilters.push(filterName);
+        }
+
+        // Update UI
+        const pills = document.querySelectorAll('.filter-pill');
+        pills.forEach(pill => {
+            if (activeFilters.includes(pill.innerText.trim())) {
+                pill.classList.replace('bg-white', 'bg-emerald-500');
+                pill.classList.replace('text-slate-600', 'text-white');
+                pill.classList.replace('border-slate-200', 'border-emerald-500');
+            } else {
+                pill.classList.replace('bg-emerald-500', 'bg-white');
+                pill.classList.replace('text-white', 'text-slate-600');
+                pill.classList.replace('border-emerald-500', 'border-slate-200');
+            }
+        });
+
+        // Update AR text button
+        const arBtn = document.getElementById("filter-type-btn");
+        if (arBtn) {
+            if (activeFilters.length === 4) arBtn.innerText = "ALL TYPES";
+            else if (activeFilters.length === 0) arBtn.innerText = "NONE";
+            else arBtn.innerText = activeFilters.length + " TYPES";
+        }
+
+        renderPeakList();
+    }
+
     function cycleFilter(type) {
         if (type === "type") {
-            const types = ["ALL", "Munro", "Corbett", "Toilet", "Cafe", "Pub", "Viewpoint", "Route"];
-            const idx = types.indexOf(currentFilterType);
-            currentFilterType = types[(idx + 1) % types.length];
-            document.getElementById("filter-type-btn").innerText = currentFilterType === "ALL" ? "All Types" : currentFilterType + "s";
-            document.getElementById("peak-type-select").value = currentFilterType;
+            // Simple toggle all on/off in AR view for speed
+            if (activeFilters.length > 0) {
+                activeFilters = [];
+            } else {
+                activeFilters = ["Peaks", "Routes", "Amenities", "Places"];
+            }
+            // Update AR text button manually since we bypassed toggleFilter
+            const arBtn = document.getElementById("filter-type-btn");
+            if (arBtn) {
+                if (activeFilters.length === 4) arBtn.innerText = "ALL TYPES";
+                else if (activeFilters.length === 0) arBtn.innerText = "NONE";
+                else arBtn.innerText = activeFilters.length + " TYPES";
+            }
+            renderPeakList();
         } else if (type === "range") {
             const ranges = [5, 10, 35, 50, 100];
             const idx = ranges.indexOf(currentFilterRange);
-            currentFilterRange = ranges[(idx + 1) % ranges.length];
-            document.getElementById("filter-range-btn").innerText = currentFilterRange + " km";
-            document.getElementById("radar-range-text").innerText = currentFilterRange + "km";
+            updateRange(ranges[(idx + 1) % ranges.length]);
         }
-        renderPeakList();
+    }
+
+    function applyFilters(peaks) {
+        return peaks.filter(p => {
+            if (p.distance > currentFilterRange) return false;
+
+            const isPeak = p.type === "Munro" || p.type === "Corbett" || p.type === "Peak" || p.type === "Hill";
+            const isRoute = p.type === "Route";
+            const isAmenity = p.type === "Toilet" || p.type === "Cafe" || p.type === "Pub" || p.type === "Viewpoint";
+            const isPlace = p.type === "Town" || p.type === "Village";
+
+            if (isPeak && !activeFilters.includes("Peaks")) return false;
+            if (isRoute && !activeFilters.includes("Routes")) return false;
+            if (isAmenity && !activeFilters.includes("Amenities")) return false;
+            if (isPlace && !activeFilters.includes("Places")) return false;
+
+            return true;
+        });
     }
 
     // Helper: Haversine distance
@@ -607,27 +696,16 @@
 
     function renderPeakList() {
         const container = document.getElementById("peaks-list-container");
-        const baggedContainer = document.getElementById("bagged-list-container");
         const searchTerm = document.getElementById("peak-search") ? document.getElementById("peak-search").value.toLowerCase() : "";
-        const typeSelect = document.getElementById("peak-type-select") ? document.getElementById("peak-type-select").value : "ALL";
-        currentFilterType = typeSelect;
 
-        if (!container || !baggedContainer) return;
+        if (!container) return;
 
         let filteredPeaks = PEAKS_DATABASE.map(p => {
             p.distance = calculateDistance(locationData.lat, locationData.lon, p.lat, p.lon);
             return p;
-        }).filter(p => p.distance <= currentFilterRange);
+        });
 
-        if (currentFilterType !== "ALL") {
-            if (currentFilterType === "Munro") {
-                 filteredPeaks = filteredPeaks.filter(p => p.type === "Munro" || p.type === "Peak");
-            } else if (currentFilterType === "Corbett") {
-                 filteredPeaks = filteredPeaks.filter(p => p.type === "Corbett" || p.type === "Hill");
-            } else {
-                filteredPeaks = filteredPeaks.filter(p => p.type === currentFilterType);
-            }
-        }
+        filteredPeaks = applyFilters(filteredPeaks);
 
         if (searchTerm) {
             filteredPeaks = filteredPeaks.filter(p => p.name.toLowerCase().includes(searchTerm));
@@ -642,7 +720,7 @@
             <div onclick="openDrawer('${p.id}')" class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-emerald-400 transition">
                 <div>
                     <h4 class="text-sm font-bold text-slate-800">${p.name}</h4>
-                    <p class="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">${p.type} • ${p.heightM}m</p>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">${p.type}${p.heightM > 0 ? ` • ${p.heightM}m` : ''}</p>
                 </div>
                 <div class="text-right">
                     <span class="text-xs font-bold text-cyan-500">${p.distance.toFixed(1)} km</span>
@@ -650,29 +728,13 @@
             </div>
         `).join("");
 
-        // Render Bagged Tab
-        const bagged = PEAKS_DATABASE.filter(p => baggedPeaks.includes(p.id));
-        document.getElementById("bagged-count").innerText = bagged.length;
-        const progress = (bagged.length / 282) * 100;
-        document.getElementById("bagged-progress-bar").style.width = Math.min(progress, 100) + "%";
-
-        baggedContainer.innerHTML = bagged.length ? bagged.map(p => `
-            <div onclick="openDrawer('${p.id}')" class="bg-white p-2.5 rounded-lg border border-emerald-500/30 flex items-center justify-between cursor-pointer">
-                <div class="flex items-center gap-2">
-                    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>
-                    <span class="text-xs font-bold text-slate-700">${p.name}</span>
-                </div>
-                <span class="text-[10px] text-slate-400">${p.heightM}m</span>
-            </div>
-        `).join("") : `<div class="text-center text-xs text-slate-400 py-4">No peaks bagged yet.</div>`;
-
         lucide.createIcons();
         updateMapMarkers(filteredPeaks);
     }
 
     let activePeakId = null;
 
-    function openDrawer(peakId) {
+    async function openDrawer(peakId) {
         const peak = PEAKS_DATABASE.find(p => p.id === peakId);
         if (!peak) return;
         activePeakId = peakId;
@@ -680,38 +742,32 @@
         document.getElementById("drawer-title").innerText = peak.name;
         document.getElementById("drawer-type-badge").innerText = peak.type;
         document.getElementById("drawer-region").innerText = peak.region;
-        document.getElementById("drawer-coords").innerText = `${peak.heightM}m • Dist: ${peak.distance ? peak.distance.toFixed(1) : "?"} km`;
+        document.getElementById("drawer-coords").innerText = `${peak.heightM > 0 ? peak.heightM + 'm • ' : ''}Dist: ${peak.distance ? peak.distance.toFixed(1) : "?"} km`;
 
-        const isBagged = baggedPeaks.includes(peakId);
-        const bagBtn = document.getElementById("bag-toggle-btn");
-        if (isBagged) {
-            bagBtn.classList.replace("bg-emerald-600", "bg-amber-500");
-            bagBtn.classList.replace("hover:bg-emerald-500", "hover:bg-amber-400");
-            document.getElementById("bag-btn-text").innerText = "Unmark Bagged";
+        if (peak.type === "Munro" || peak.type === "Corbett" || peak.type === "Peak" || peak.type === "Hill") {
+            document.getElementById("spec-grid").classList.remove("hidden");
+            document.getElementById("spec-ascent").innerText = peak.heightM + "m";
+            document.getElementById("spec-terrain").innerText = "Mountain";
         } else {
-            bagBtn.classList.replace("bg-amber-500", "bg-emerald-600");
-            bagBtn.classList.replace("hover:bg-amber-400", "hover:bg-emerald-500");
-            document.getElementById("bag-btn-text").innerText = "Mark Bagged";
+            document.getElementById("spec-grid").classList.add("hidden");
         }
 
         document.getElementById("peak-drawer").classList.remove("hidden");
+
+        // Fetch Wikipedia summary
+        const aiLoading = document.getElementById("ai-loading");
+        const aiContent = document.getElementById("ai-content");
+        aiLoading.classList.remove("hidden");
+        aiContent.innerHTML = "";
+
+        const summary = await fetchWikipediaSummary(peak.name);
+        aiLoading.classList.add("hidden");
+        aiContent.innerText = summary;
     }
 
     function closeDrawer() {
         document.getElementById("peak-drawer").classList.add("hidden");
         activePeakId = null;
-    }
-
-    function toggleBaggedState() {
-        if (!activePeakId) return;
-        if (baggedPeaks.includes(activePeakId)) {
-            baggedPeaks = baggedPeaks.filter(id => id !== activePeakId);
-        } else {
-            baggedPeaks.push(activePeakId);
-        }
-        localStorage.setItem(BAGGED_KEY, JSON.stringify(baggedPeaks));
-        openDrawer(activePeakId); // refresh
-        renderPeakList();
     }
 
     function copyPeakCoords() {
@@ -747,13 +803,17 @@
 
         // Add peak markers (limit to top 50 to avoid clutter)
         peaks.slice(0, 50).forEach(p => {
-            const isBagged = baggedPeaks.includes(p.id);
+            let colorClass = "bg-rose-500";
+            if (p.type === "Toilet" || p.type === "Cafe" || p.type === "Pub") colorClass = "bg-purple-500";
+            else if (p.type === "Route") colorClass = "bg-blue-500";
+            else if (p.type === "Town" || p.type === "Village") colorClass = "bg-amber-500";
+
             const icon = L.divIcon({
-                html: `<div class="w-3 h-3 ${isBagged ? 'bg-emerald-500' : 'bg-rose-500'} rounded-full border border-white shadow"></div>`,
+                html: `<div class="w-3 h-3 ${colorClass} rounded-full border border-white shadow"></div>`,
                 className: ""
             });
             const m = L.marker([p.lat, p.lon], {icon}).addTo(map)
-                .bindPopup(`<b>${p.name}</b><br>${p.heightM}m<br><button onclick="openDrawer('${p.id}')" class="mt-1 text-xs text-blue-500 underline">View</button>`);
+                .bindPopup(`<b>${p.name}</b><br>${p.heightM > 0 ? p.heightM + 'm<br>' : ''}<button onclick="openDrawer('${p.id}')" class="mt-1 text-xs text-blue-500 underline">View</button>`);
             markers.push(m);
         });
     }
@@ -789,17 +849,8 @@
         let filteredPeaks = PEAKS_DATABASE.map(p => {
             p.distance = calculateDistance(locationData.lat, locationData.lon, p.lat, p.lon);
             return p;
-        }).filter(p => p.distance <= currentFilterRange);
-
-        if (currentFilterType !== "ALL") {
-            if (currentFilterType === "Munro") {
-                 filteredPeaks = filteredPeaks.filter(p => p.type === "Munro" || p.type === "Peak");
-            } else if (currentFilterType === "Corbett") {
-                 filteredPeaks = filteredPeaks.filter(p => p.type === "Corbett" || p.type === "Hill");
-            } else {
-                filteredPeaks = filteredPeaks.filter(p => p.type === currentFilterType);
-            }
-        }
+        });
+        filteredPeaks = applyFilters(filteredPeaks);
 
         // Draw range rings
         ctx.strokeStyle = "rgba(6, 182, 212, 0.2)";
@@ -891,17 +942,8 @@
         let filteredPeaks = PEAKS_DATABASE.map(p => {
             p.distance = calculateDistance(locationData.lat, locationData.lon, p.lat, p.lon);
             return p;
-        }).filter(p => p.distance <= currentFilterRange);
-
-        if (currentFilterType !== "ALL") {
-            if (currentFilterType === "Munro") {
-                 filteredPeaks = filteredPeaks.filter(p => p.type === "Munro" || p.type === "Peak");
-            } else if (currentFilterType === "Corbett") {
-                 filteredPeaks = filteredPeaks.filter(p => p.type === "Corbett" || p.type === "Hill");
-            } else {
-                filteredPeaks = filteredPeaks.filter(p => p.type === currentFilterType);
-            }
-        }
+        });
+        filteredPeaks = applyFilters(filteredPeaks);
 
         function calcBearing(lat1, lon1, lat2, lon2) {
             const radLat1 = lat1 * Math.PI/180;
@@ -949,6 +991,7 @@
                     else if (p.type === "Cafe") { color = "#a855f7"; prefix = "☕"; }
                     else if (p.type === "Pub") { color = "#a855f7"; prefix = "🍻"; }
                     else if (p.type === "Viewpoint") { color = "#14b8a6"; prefix = "👁️"; }
+                    else if (p.type === "Town" || p.type === "Village") { color = "#eab308"; prefix = "🏘️"; }
                     else if (p.type === "Route") { color = "#3b82f6"; prefix = "🛤️"; }
 
                     ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
@@ -1035,7 +1078,7 @@
 
     // Initialize with a mock location by default
     document.addEventListener("DOMContentLoaded", () => {
-        setSimLocation("glencoe");
+        setSimLocation("live");
         requestSensorPermissions();
         requestAnimationFrame(renderRadar);
         requestAnimationFrame(renderAR);
