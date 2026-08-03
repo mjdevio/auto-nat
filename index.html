@@ -290,17 +290,27 @@
     let currentDeviceIndex = 0;
 
     async function switchCamera() {
-        if (videoDevices.length === 0) {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                videoDevices = devices.filter(d => d.kind === 'videoinput');
-            } catch (e) {
-                console.warn("Could not enumerate devices", e);
-            }
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            videoDevices = devices.filter(d => d.kind === 'videoinput');
+        } catch (e) {
+            console.warn("Could not enumerate devices", e);
         }
 
         if (videoDevices.length > 1) {
+            // Find current device index if possible, otherwise use 0
+            if (stream) {
+                const currentTrack = stream.getVideoTracks()[0];
+                if (currentTrack) {
+                    const currentDeviceId = currentTrack.getSettings().deviceId;
+                    const idx = videoDevices.findIndex(d => d.deviceId === currentDeviceId);
+                    if (idx !== -1) {
+                        currentDeviceIndex = idx;
+                    }
+                }
+            }
             currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
@@ -308,88 +318,153 @@
         }
     }
 
+    let fetchTimeout = null;
+    let currentFetchPromise = null;
+    let fetchResolve = null;
+
     async function fetchOverpassData(lat, lon, rangeKm) {
-        const statusEl = document.getElementById("location-status");
-        statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> Fetching local data...`;
+        if (fetchTimeout) {
+            clearTimeout(fetchTimeout);
+            if (fetchResolve) {
+                fetchResolve();
+            }
+        }
 
-        // Build Overpass QL
-        // We'll search for: natural=peak, natural=hill, route=hiking/foot/bicycle, amenity=toilets, amenity=cafe/pub (common walker spots)
-        const radiusMeters = rangeKm * 1000;
+        // Debounce fetches
+        currentFetchPromise = new Promise(resolve => {
+            fetchResolve = resolve;
+            fetchTimeout = setTimeout(async () => {
+                const statusEl = document.getElementById("location-status");
+                statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> Fetching local data...`;
 
-        // A single around query string to be used for multiple node/way types
-        const bbox = `(around:${radiusMeters},${lat},${lon})`;
+                const cacheKey = `overpass_data_${rangeKm}`;
+                const cached = localStorage.getItem(cacheKey);
 
-        const query = `
-            [out:json][timeout:25];
-            (
-              node["natural"~"peak|hill"]${bbox};
-              node["amenity"~"toilets|cafe|pub"]${bbox};
-              node["tourism"~"viewpoint"]${bbox};
-              node["place"~"town|village"]${bbox};
-              way["route"~"hiking|foot|bicycle"]${bbox};
-              relation["route"~"hiking|foot|bicycle"]${bbox};
-            );
-            out center;
-        `;
+                if (cached) {
+                    try {
+                        const parsed = JSON.parse(cached);
+                        const distFromCache = calculateDistance(lat, lon, parsed.lat, parsed.lon);
+                        // If we have cached data for this range and we haven't moved more than 2km, use it
+                        if (distFromCache < 2) {
+                            PEAKS_DATABASE = parsed.data;
+                            statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> GPS/Data Active (Cached)`;
+                            renderPeakList();
+                            return resolve();
+                        }
+                    } catch(e) {
+                        console.warn("Invalid cache data", e);
+                    }
+                }
 
-        try {
-            const res = await fetch("https://overpass-api.de/api/interpreter", {
-                method: "POST",
-                body: "data=" + encodeURIComponent(query),
-                headers: { "Content-Type": "application/x-www-form-urlencoded" }
-            });
-            const data = await res.json();
+                // Build Overpass QL
+                // We'll search for: natural=peak, natural=hill, route=hiking/foot/bicycle, amenity=toilets, amenity=cafe/pub (common walker spots)
+                const radiusMeters = rangeKm * 1000;
 
-            // Map Overpass nodes to our internal format
-            let newDatabase = [];
+                // A single around query string to be used for multiple node/way types
+                const bbox = `(around:${radiusMeters},${lat},${lon})`;
 
-            for (const element of data.elements) {
-                if (element.tags) {
-                    let type = "Unknown";
-                    let name = element.tags.name || "Unnamed";
-                    let height = parseFloat(element.tags.ele) || 0;
+                const query = `
+                    [out:json][timeout:25];
+                    (
+                      node["natural"~"peak|hill"]${bbox};
+                      node["amenity"~"toilets|cafe|pub"]${bbox};
+                      node["tourism"~"viewpoint"]${bbox};
+                      node["place"~"town|village"]${bbox};
+                      way["route"~"hiking|foot|bicycle"]${bbox};
+                      relation["route"~"hiking|foot|bicycle"]${bbox};
+                    );
+                    out center;
+                `;
 
-                    let elLat = element.lat;
-                    let elLon = element.lon;
-                    if (element.type === "way" || element.type === "relation") {
-                        if (element.center) {
-                             elLat = element.center.lat;
-                             elLon = element.center.lon;
-                        } else {
-                            continue; // skip if no center
+                try {
+                    const res = await fetch("https://overpass-api.de/api/interpreter", {
+                        method: "POST",
+                        body: "data=" + encodeURIComponent(query),
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" }
+                    });
+
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+
+                    const data = await res.json();
+
+                    if (data.remark) {
+                        throw new Error(`API Notice: ${data.remark}`);
+                    }
+
+                    if (!data.elements) {
+                        throw new Error("Invalid response format: missing elements");
+                    }
+
+                    // Map Overpass nodes to our internal format
+                    let newDatabase = [];
+
+                    for (const element of data.elements) {
+                        if (element.tags) {
+                            let type = "Unknown";
+                            let name = element.tags.name || "Unnamed";
+                            let height = parseFloat(element.tags.ele) || 0;
+
+                            let elLat = element.lat;
+                            let elLon = element.lon;
+                            if (element.type === "way" || element.type === "relation") {
+                                if (element.center) {
+                                     elLat = element.center.lat;
+                                     elLon = element.center.lon;
+                                } else {
+                                    continue; // skip if no center
+                                }
+                            }
+
+                            if (element.tags.natural === "peak") type = height > 914 ? "Munro" : "Peak";
+                            else if (element.tags.natural === "hill") type = "Hill";
+                            else if (element.tags.amenity === "toilets") { type = "Toilet"; name = element.tags.name || "Public Toilets"; height = 0;}
+                            else if (element.tags.amenity === "cafe") { type = "Cafe"; name = element.tags.name || "Cafe"; height = 0;}
+                            else if (element.tags.amenity === "pub") { type = "Pub"; name = element.tags.name || "Pub"; height = 0;}
+                            else if (element.tags.tourism === "viewpoint") { type = "Viewpoint"; name = element.tags.name || "Viewpoint"; height = 0;}
+                            else if (element.tags.place === "town") { type = "Town"; name = element.tags.name || "Town"; height = 0;}
+                            else if (element.tags.place === "village") { type = "Village"; name = element.tags.name || "Village"; height = 0;}
+                            else if (element.tags.route) { type = "Route"; name = element.tags.name || (element.tags.route + " Route"); height = 0;}
+
+                            newDatabase.push({
+                                id: `${element.type}-${element.id}`,
+                                name: name,
+                                type: type,
+                                heightM: height,
+                                lat: elLat,
+                                lon: elLon,
+                                region: "Local" // We don't have region data easily, so generic string
+                            });
                         }
                     }
 
-                    if (element.tags.natural === "peak") type = height > 914 ? "Munro" : "Peak";
-                    else if (element.tags.natural === "hill") type = "Hill";
-                    else if (element.tags.amenity === "toilets") { type = "Toilet"; name = element.tags.name || "Public Toilets"; height = 0;}
-                    else if (element.tags.amenity === "cafe") { type = "Cafe"; name = element.tags.name || "Cafe"; height = 0;}
-                    else if (element.tags.amenity === "pub") { type = "Pub"; name = element.tags.name || "Pub"; height = 0;}
-                    else if (element.tags.tourism === "viewpoint") { type = "Viewpoint"; name = element.tags.name || "Viewpoint"; height = 0;}
-                    else if (element.tags.place === "town") { type = "Town"; name = element.tags.name || "Town"; height = 0;}
-                    else if (element.tags.place === "village") { type = "Village"; name = element.tags.name || "Village"; height = 0;}
-                    else if (element.tags.route) { type = "Route"; name = element.tags.name || (element.tags.route + " Route"); height = 0;}
+                    PEAKS_DATABASE = newDatabase;
 
-                    newDatabase.push({
-                        id: `${element.type}-${element.id}`,
-                        name: name,
-                        type: type,
-                        heightM: height,
-                        lat: elLat,
-                        lon: elLon,
-                        region: "Local" // We don't have region data easily, so generic string
-                    });
+                    // Save to cache
+                    localStorage.setItem(cacheKey, JSON.stringify({
+                        lat: lat,
+                        lon: lon,
+                        timestamp: Date.now(),
+                        data: newDatabase
+                    }));
+
+                    statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> GPS/Data Active`;
+                    renderPeakList();
+
+                } catch (err) {
+                    console.error("Overpass fetch failed:", err);
+                    statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span> Data Fetch Failed`;
+                    alert(`Data Fetch Error: ${err.message}. ${err.message.includes('429') ? 'You may be rate limited. Please try again later.' : ''}`);
                 }
-            }
-
-            PEAKS_DATABASE = newDatabase;
-            statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> GPS/Data Active`;
-            renderPeakList();
-
-        } catch (err) {
-            console.error("Overpass fetch failed:", err);
-            statusEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span> Data Fetch Failed`;
-        }
+                if (fetchResolve) {
+                    fetchResolve();
+                    fetchResolve = null;
+                    currentFetchPromise = null;
+                }
+            }, 1000); // 1 second debounce
+        });
+        return currentFetchPromise;
     }
 
 
